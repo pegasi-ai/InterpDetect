@@ -205,3 +205,29 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Large dataset files (>100MB)
+scripts/preprocess/datasets/
+datasets/*.jsonl
+datasets/train/*.jsonl
+datasets/test/*.jsonl
+datasets/train/chunk_scores/*.json
+datasets/test/*.json
+
+# Temporary and output files
+tmp/
+results/
+*.pickle
+*.pkl
+
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth
+*.bin
+
+# Plots and visualizations
+*.png
+*.jpg
+*.pdf
+plots/
