@@ -1,0 +1,24 @@
+# Baseline-only optional dependencies
+
+# RAG Evaluation Frameworks
+ragas
+langchain
+langchain-core
+langchain-openai
+langchain-text-splitters
+langchain-community
+
+# Fact-checking and Evaluation
+refchecker>=0.1.0
+apscheduler>=3.10.4
+fastapi-sso
+
+
+# LLM Evaluation Framework (TruLens stack)
+trulens==2.4.1
+trulens-providers-openai==2.4.1
+chromadb>=0.4.0
+streamlit==1.37.1
+GitPython==3.1.44
+protobuf==4.25.3
+

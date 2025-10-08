@@ -151,7 +151,7 @@ def main():
     """Main function to run the HuggingFace baseline evaluation"""
     parser = argparse.ArgumentParser(description='Run HuggingFace baseline for hallucination detection')
     parser.add_argument('--data_path', type=str, 
-                       default="../../datasets/test/test1176_w_chunk_score_gpt41mini_calibrated.json",
+                       default="../../datasets/test/test_w_chunk_score_gpt41mini.json",
                        help='Path to the test data file')
     parser.add_argument('--models', nargs='+', 
                        default=['Qwen/Qwen3-0.6B'],

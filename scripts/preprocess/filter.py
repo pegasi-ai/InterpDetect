@@ -9,19 +9,42 @@ import textwrap
 import argparse
 import sys
 import os
+import json
 
-def load_datasets(train_path, val_path, test_path):
+def load_datasets(train_path, test_path):
     """Load datasets from JSONL files"""
     print("Loading datasets...")
     
     try:
-        df_train = pd.read_json(train_path, lines=True)
-        df_val = pd.read_json(val_path, lines=True)
-        df_test = pd.read_json(test_path, lines=True)
+        # Read files and parse JSONL properly with error handling
+        train_data = []
+        with open(train_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:  # Skip empty lines
+                    try:
+                        train_data.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Skipping invalid JSON on line {line_num} in {train_path}: {e}")
+                        continue
         
-        print(f"Loaded {len(df_train)} training samples, {len(df_val)} validation samples, {len(df_test)} test samples")
+        test_data = []
+        with open(test_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:  # Skip empty lines
+                    try:
+                        test_data.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Skipping invalid JSON on line {line_num} in {test_path}: {e}")
+                        continue
         
-        return df_train, df_val, df_test
+        df_train = pd.DataFrame(train_data)
+        df_test = pd.DataFrame(test_data)
+        
+        print(f"Loaded {len(df_train)} training samples, {len(df_test)} test samples")
+        
+        return df_train, df_test
         
     except Exception as e:
         print(f"Error loading datasets: {e}")
@@ -86,7 +109,7 @@ def apply_confidence_threshold(df, threshold=0.7):
     df['adjusted_labels'] = lst
     return df
 
-def filter_datasets(df_train, df_val, df_test, use_confidence_threshold=False, confidence_threshold=0.7):
+def filter_datasets(df_train, df_test, use_confidence_threshold=False, confidence_threshold=0.7):
     """Filter datasets based on LLM judge agreement"""
     print("Filtering datasets based on LLM judge agreement...")
     
@@ -106,17 +129,15 @@ def filter_datasets(df_train, df_val, df_test, use_confidence_threshold=False, c
     # Apply confidence threshold if requested
     if use_confidence_threshold:
         df_train = apply_confidence_threshold(df_train, confidence_threshold)
-        df_val = apply_confidence_threshold(df_val, confidence_threshold)
         df_test = apply_confidence_threshold(df_test, confidence_threshold)
     
     # Filter datasets
     df_train_filtered = filtering(df_train)
-    df_val_filtered = filtering(df_val)
     df_test_filtered = filtering(df_test)
     
-    print(f"After filtering: {len(df_train_filtered)} training, {len(df_val_filtered)} validation, {len(df_test_filtered)} test samples")
+    print(f"After filtering: {len(df_train_filtered)} training, {len(df_test_filtered)} test samples")
     
-    return df_train_filtered, df_val_filtered, df_test_filtered
+    return df_train_filtered, df_test_filtered
 
 def save_dataset(df, output_path, dataset_name):
     """Save dataset to JSONL format"""
@@ -136,16 +157,13 @@ def main():
     """Main function to run the filtering pipeline"""
     parser = argparse.ArgumentParser(description='Filter RAGBench datasets based on LLM judge agreement')
     parser.add_argument('--train_path', type=str, 
-                       default="../datasets/train/train3000_w_labels.jsonl",
+                       default="../../datasets/train/train3000_w_labels.jsonl",
                        help='Path to training dataset')
-    parser.add_argument('--val_path', type=str, 
-                       default="../datasets/val/val100_w_labels.jsonl",
-                       help='Path to validation dataset')
     parser.add_argument('--test_path', type=str, 
-                       default="../datasets/test/test100_w_labels.jsonl",
+                       default="../../datasets/test/test1176_w_labels.jsonl",
                        help='Path to test dataset')
     parser.add_argument('--output_dir', type=str, 
-                       default="../datasets",
+                       default="../../tmp",
                        help='Output directory for filtered datasets')
     parser.add_argument('--llama_column', type=str,
                        default="hallucinated_llama-4-maverick-17b-128e-instruct",
@@ -160,8 +178,6 @@ def main():
                        help='Confidence threshold for LettuceDetect labels')
     parser.add_argument('--skip_train', action='store_true',
                        help='Skip processing training dataset')
-    parser.add_argument('--skip_val', action='store_true',
-                       help='Skip processing validation dataset')
     parser.add_argument('--skip_test', action='store_true',
                        help='Skip processing test dataset')
     parser.add_argument('--verbose', action='store_true',
@@ -173,34 +189,34 @@ def main():
         print("Starting filtering pipeline...")
     
     # Load datasets
-    df_train, df_val, df_test = load_datasets(args.train_path, args.val_path, args.test_path)
+    df_train, df_test = load_datasets(args.train_path, args.test_path)
     
     # Add binary labels for LLM judge evaluations
     print("\nAdding binary labels for LLM judge evaluations...")
     df_train = add_labels_llm(df_train, args.llama_column, args.gpt_column)
-    df_val = add_labels_llm(df_val, args.llama_column, args.gpt_column)
     df_test = add_labels_llm(df_test, args.llama_column, args.gpt_column)
     
     # Filter datasets
     print("\nFiltering datasets...")
-    df_train_filtered, df_val_filtered, df_test_filtered = filter_datasets(
-        df_train, df_val, df_test, args.use_confidence_threshold, args.confidence_threshold
+    df_train_filtered, df_test_filtered = filter_datasets(
+        df_train, df_test, args.use_confidence_threshold, args.confidence_threshold
     )
     
     # Save filtered datasets
     if not args.skip_train:
+        # Generate output filename from input path
+        train_basename = os.path.basename(args.train_path)
+        train_output = train_basename.replace("_w_labels.jsonl", "_w_labels_filtered.jsonl")
         save_dataset(df_train_filtered, 
-                    os.path.join(args.output_dir, "train", "train3000_w_labels_filtered.jsonl"), 
+                    os.path.join(args.output_dir, "train", train_output), 
                     "training")
     
-    if not args.skip_val:
-        save_dataset(df_val_filtered, 
-                    os.path.join(args.output_dir, "val", "val100_w_labels_filtered.jsonl"), 
-                    "validation")
-    
     if not args.skip_test:
+        # Generate output filename from input path
+        test_basename = os.path.basename(args.test_path)
+        test_output = test_basename.replace("_w_labels.jsonl", "_w_labels_filtered.jsonl")
         save_dataset(df_test_filtered, 
-                    os.path.join(args.output_dir, "test", "test100_w_labels_filtered.jsonl"), 
+                    os.path.join(args.output_dir, "test", test_output), 
                     "test")
     
     print("Filtering completed successfully!")
@@ -208,7 +224,6 @@ def main():
     # Return filtered datasets for potential further use
     return {
         'train': df_train_filtered if not args.skip_train else None,
-        'val': df_val_filtered if not args.skip_val else None,
         'test': df_test_filtered if not args.skip_test else None
     }
 

@@ -4,26 +4,35 @@ import pandas as pd
 import argparse
 import sys
 import os
+import json
 import torch
 
-def load_datasets(train_path, val_path, test_path):
+def load_datasets(train_path, test_path):
     """Load datasets from JSONL files"""
     print("Loading datasets...")
     
     try:
-        df_train = pd.read_json(train_path, lines=True)
-        df_val = pd.read_json(val_path, lines=True)
-        df_test = pd.read_json(test_path, lines=True)
+        # Use StringIO to avoid FutureWarning about literal json
+        from io import StringIO
         
-        print(f"Loaded {len(df_train)} training samples, {len(df_val)} validation samples, {len(df_test)} test samples")
+        # Read files and parse JSONL properly
+        with open(train_path, 'r', encoding='utf-8') as f:
+            train_data = [json.loads(line.strip()) for line in f if line.strip()]
+        with open(test_path, 'r', encoding='utf-8') as f:
+            test_data = [json.loads(line.strip()) for line in f if line.strip()]
         
-        return df_train, df_val, df_test
+        df_train = pd.DataFrame(train_data)
+        df_test = pd.DataFrame(test_data)
+        
+        print(f"Loaded {len(df_train)} training samples, {len(df_test)} test samples")
+        
+        return df_train, df_test
         
     except Exception as e:
         print(f"Error loading datasets: {e}")
         sys.exit(1)
 
-def filter_by_token_count(df_train, df_val, df_test, model_name, max_tokens=1024):
+def filter_by_token_count(df_train, df_test, model_name, max_tokens=1024):
     """Filter datasets by token count"""
     print(f"Filtering datasets by token count (max: {max_tokens})...")
     
@@ -36,45 +45,79 @@ def filter_by_token_count(df_train, df_val, df_test, model_name, max_tokens=1024
     
     # Count tokens
     df_train["num_tokens"] = df_train["prompt"].apply(count_tokens)
-    df_val["num_tokens"] = df_val["prompt"].apply(count_tokens)
     df_test["num_tokens"] = df_test["prompt"].apply(count_tokens)
     
     # Filter by token count
     df_train = df_train[df_train["num_tokens"] <= max_tokens]
-    df_val = df_val[df_val["num_tokens"] <= max_tokens]
     df_test = df_test[df_test["num_tokens"] <= max_tokens]
     
-    print(f"After filtering: {len(df_train)} training, {len(df_val)} validation, {len(df_test)} test samples")
+    print(f"After filtering: {len(df_train)} training,  {len(df_test)} test samples")
     
-    return df_train, df_val, df_test
+    return df_train, df_test
 
-def limit_samples(df_train, df_val, df_test, train_samples, val_samples, test_samples):
+def limit_samples(df_train, df_test, train_samples, test_samples):
     """Limit the number of samples in each dataset"""
-    print(f"Limiting samples: train={train_samples}, val={val_samples}, test={test_samples}")
+    print(f"Limiting samples: train={train_samples}, test={test_samples}")
     
     df_train = df_train[0:train_samples]
-    df_val = df_val[0:val_samples]
     df_test = df_test[0:test_samples]
     
-    print(f"Final dataset sizes: {len(df_train)} training, {len(df_val)} validation, {len(df_test)} test samples")
+    print(f"Final dataset sizes: {len(df_train)} training, {len(df_test)} test samples")
     
-    return df_train, df_val, df_test
+    return df_train, df_test
 
 def setup_model(model_name, device="auto"):
     """Setup the model and tokenizer"""
     print(f"Loading model: {model_name}")
     
+    # Handle device selection for Apple Silicon
+    if device == "auto":
+        if torch.backends.mps.is_available():
+            # For certain models, MPS can cause matrix multiplication issues
+            # Use CPU for stability unless explicitly requested
+            print("MPS available but using CPU for stability (use --device mps to force MPS)")
+            device = "cpu"
+        elif torch.cuda.is_available():
+            device = "cuda"
+            print("Using CUDA acceleration")
+        else:
+            device = "cpu"
+            print("Using CPU")
+    
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype="auto",
-            device_map=device
-        )
-        return tokenizer, model
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
+        # Load model with appropriate settings for Apple Silicon
+        if device == "mps":
+            # Use float32 for MPS to avoid matrix multiplication issues
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float32,
+                device_map="cpu"  # Load to CPU first, then move to MPS
+            )
+            model = model.to(device)
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16,
+                device_map=device
+            )
+        
+        return tokenizer, model, device
     except Exception as e:
-        print(f"Error loading model {model_name}: {e}")
-        sys.exit(1)
+        print(f"Error loading model with {device}, falling back to CPU: {e}")
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float32,
+                device_map="cpu"
+            )
+            return tokenizer, model, "cpu"
+        except Exception as e2:
+            print(f"Error loading model {model_name}: {e2}")
+            sys.exit(1)
 
 def add_special_template(tokenizer, prompt):
     """Add special template to prompt"""
@@ -90,7 +133,7 @@ def add_special_template(tokenizer, prompt):
     )
     return text
 
-def generate_response(df, tokenizer, model, max_new_tokens=1024):
+def generate_response(df, tokenizer, model, max_new_tokens=1024, device=None):
     """Generate responses for the dataset"""
     print("Generating responses...")
     
@@ -104,14 +147,33 @@ def generate_response(df, tokenizer, model, max_new_tokens=1024):
         try:
             prompt = row['prompt']
             text = add_special_template(tokenizer, prompt)
-            model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+            model_inputs = tokenizer([text], return_tensors="pt")
             
-            # conduct text completion
-            generated_ids = model.generate(
-                **model_inputs,
-                max_new_tokens=max_new_tokens
-            )
-            output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+            # Move inputs to the correct device
+            if device:
+                model_inputs = {k: v.to(device) for k, v in model_inputs.items()}
+            else:
+                model_inputs = model_inputs.to(model.device)
+            
+            # conduct text completion with MPS error handling
+            try:
+                generated_ids = model.generate(
+                    **model_inputs,
+                    max_new_tokens=max_new_tokens
+                )
+            except RuntimeError as e:
+                if "mps_matmul" in str(e) or "incompatible dimensions" in str(e):
+                    print(f"MPS error detected, falling back to CPU for sample {i}")
+                    # Move model and inputs to CPU
+                    model = model.cpu()
+                    model_inputs = {k: v.cpu() for k, v in model_inputs.items()}
+                    generated_ids = model.generate(
+                        **model_inputs,
+                        max_new_tokens=max_new_tokens
+                    )
+                else:
+                    raise e
+            output_ids = generated_ids[0][len(model_inputs['input_ids'][0]):].tolist() 
 
             # parsing thinking content
             try:
@@ -163,26 +225,20 @@ def main():
     """Main function to run the response generation pipeline"""
     parser = argparse.ArgumentParser(description='Generate responses for RAGBench dataset using language models')
     parser.add_argument('--train_path', type=str, 
-                       default="../datasets/train/train.jsonl",
+                       default="datasets/train/train.jsonl",
                        help='Path to training dataset')
-    parser.add_argument('--val_path', type=str, 
-                       default="../datasets/val/val.jsonl",
-                       help='Path to validation dataset')
     parser.add_argument('--test_path', type=str, 
-                       default="../datasets/test/test.jsonl",
+                       default="datasets/test/test.jsonl",
                        help='Path to test dataset')
     parser.add_argument('--model_name', type=str, 
                        default="Qwen/Qwen3-0.6B",
                        help='Model name to use for generation')
     parser.add_argument('--output_dir', type=str, 
-                       default="../datasets",
+                       default="datasets",
                        help='Output directory for generated datasets')
     parser.add_argument('--train_samples', type=int,
                        default=3000,
                        help='Number of training samples to process')
-    parser.add_argument('--val_samples', type=int,
-                       default=100,
-                       help='Number of validation samples to process')
     parser.add_argument('--test_samples', type=int,
                        default=100,
                        help='Number of test samples to process')
@@ -195,10 +251,12 @@ def main():
     parser.add_argument('--device', type=str,
                        default="auto",
                        help='Device to run model on (auto, cpu, cuda, etc.)')
+    parser.add_argument('--force_cpu', action='store_true',
+                       help='Force CPU usage to avoid MPS issues on Apple Silicon')
+    parser.add_argument('--disable_mps', action='store_true',
+                       help='Disable MPS acceleration (recommended for Apple Silicon)')
     parser.add_argument('--skip_train', action='store_true',
                        help='Skip processing training dataset')
-    parser.add_argument('--skip_val', action='store_true',
-                       help='Skip processing validation dataset')
     parser.add_argument('--skip_test', action='store_true',
                        help='Skip processing test dataset')
     parser.add_argument('--verbose', action='store_true',
@@ -210,41 +268,37 @@ def main():
         print("Starting response generation pipeline...")
     
     # Load datasets
-    df_train, df_val, df_test = load_datasets(args.train_path, args.val_path, args.test_path)
+    df_train, df_test = load_datasets(args.train_path, args.test_path)
     
     # Filter by token count
-    df_train, df_val, df_test = filter_by_token_count(
-        df_train, df_val, df_test, args.model_name, args.max_tokens
+    df_train, df_test = filter_by_token_count(
+        df_train, df_test, args.model_name, args.max_tokens
     )
     
     # Limit samples
-    df_train, df_val, df_test = limit_samples(
-        df_train, df_val, df_test, args.train_samples, args.val_samples, args.test_samples
+    df_train, df_test = limit_samples(
+        df_train, df_test, args.train_samples, args.test_samples
     )
     
     # Setup model
-    tokenizer, model = setup_model(args.model_name, args.device)
+    if args.force_cpu or args.disable_mps:
+        device = "cpu"
+    else:
+        device = args.device
+    tokenizer, model, device = setup_model(args.model_name, device)
     
     # Generate responses for training dataset
     if not args.skip_train:
         print("\nGenerating responses for training dataset...")
-        df_train = generate_response(df_train, tokenizer, model, args.max_new_tokens)
+        df_train = generate_response(df_train, tokenizer, model, args.max_new_tokens, device)
         save_dataset(df_train, 
                     os.path.join(args.output_dir, "train", f"train{args.train_samples}_w_response.jsonl"), 
                     "training")
     
-    # Generate responses for validation dataset
-    if not args.skip_val:
-        print("\nGenerating responses for validation dataset...")
-        df_val = generate_response(df_val, tokenizer, model, args.max_new_tokens)
-        save_dataset(df_val, 
-                    os.path.join(args.output_dir, "val", f"val{args.val_samples}_w_response.jsonl"), 
-                    "validation")
-    
     # Generate responses for test dataset
     if not args.skip_test:
         print("\nGenerating responses for test dataset...")
-        df_test = generate_response(df_test, tokenizer, model, args.max_new_tokens)
+        df_test = generate_response(df_test, tokenizer, model, args.max_new_tokens, device)
         save_dataset(df_test, 
                     os.path.join(args.output_dir, "test", f"test{args.test_samples}_w_response.jsonl"), 
                     "test")
@@ -254,7 +308,6 @@ def main():
     # Return processed datasets for potential further use
     return {
         'train': df_train if not args.skip_train else None,
-        'val': df_val if not args.skip_val else None,
         'test': df_test if not args.skip_test else None
     }
 

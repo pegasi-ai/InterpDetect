@@ -199,10 +199,10 @@ def main():
     """Main function to run the TruLens baseline evaluation"""
     parser = argparse.ArgumentParser(description='Run TruLens baseline for hallucination detection')
     parser.add_argument('--data_path', type=str, 
-                       default="../../datasets/test/test1176_w_chunk_score_gpt41mini_calibrated.json",
+                       default="../../datasets/test/test_w_chunk_score_gpt41mini.json",
                        help='Path to the test data file')
     parser.add_argument('--model', type=str, 
-                       default="gpt-4o",
+                       default="gpt-4.1",
                        help='OpenAI model to use for TruLens evaluation')
     parser.add_argument('--wait_time', type=int,
                        default=20,

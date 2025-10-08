@@ -123,10 +123,10 @@ def main():
     """Main function to run the GPT baseline evaluation"""
     parser = argparse.ArgumentParser(description='Run GPT baseline for hallucination detection')
     parser.add_argument('--data_path', type=str, 
-                       default="../../datasets/test/test1176_w_chunk_score_gpt41mini_calibrated.json",
+                       default="../../datasets/test/test_w_chunk_score_gpt41mini.json",
                        help='Path to the test data file')
     parser.add_argument('--models', nargs='+', 
-                       default=['gpt-4o', 'gpt-4o-mini'],
+                       default=['gpt-5', 'gpt-4.1'],
                        help='List of GPT models to evaluate')
     parser.add_argument('--save_results', action='store_true',
                        help='Save results to file')
@@ -136,19 +136,30 @@ def main():
     
     args = parser.parse_args()
     
+    # Resolve paths relative to project root (two levels up from this script)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+    
+    data_path = args.data_path
+    if not os.path.isabs(data_path):
+        data_path = os.path.join(project_root, data_path)
+    
     # Load environment variables
     load_dotenv()
-    api_key = os.getenv("API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     
     if not api_key:
-        print("Error: API_KEY not found in environment variables")
+        print("Error: OPENAI_API_KEY not found in environment variables")
         sys.exit(1)
     
     client = OpenAI()
     
     # Load and balance data
-    print(f"Loading data from: {args.data_path}")
-    df = load_and_balance_data(args.data_path)
+    print(f"Loading data from: {data_path}")
+    if not os.path.exists(data_path):
+        print(f"Error: Data file not found at {data_path}")
+        sys.exit(1)
+    df = load_and_balance_data(data_path)
     
     results = []
     

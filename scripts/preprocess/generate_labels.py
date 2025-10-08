@@ -8,20 +8,43 @@ import textwrap
 import argparse
 import sys
 import os
+import json
 from dotenv import load_dotenv
 
-def load_datasets(train_path, val_path, test_path):
+def load_datasets(train_path, test_path):
     """Load datasets from JSONL files"""
     print("Loading datasets...")
     
     try:
-        df_train = pd.read_json(train_path, lines=True)
-        df_val = pd.read_json(val_path, lines=True)
-        df_test = pd.read_json(test_path, lines=True)
+        # Read files and parse JSONL properly with error handling
+        train_data = []
+        with open(train_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:  # Skip empty lines
+                    try:
+                        train_data.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Skipping invalid JSON on line {line_num} in {train_path}: {e}")
+                        continue
         
-        print(f"Loaded {len(df_train)} training samples, {len(df_val)} validation samples, {len(df_test)} test samples")
+        test_data = []
+        with open(test_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if line:  # Skip empty lines
+                    try:
+                        test_data.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Skipping invalid JSON on line {line_num} in {test_path}: {e}")
+                        continue
         
-        return df_train, df_val, df_test
+        df_train = pd.DataFrame(train_data)
+        df_test = pd.DataFrame(test_data)
+        
+        print(f"Loaded {len(df_train)} training samples, {len(df_test)} test samples")
+        
+        return df_train, df_test
         
     except Exception as e:
         print(f"Error loading datasets: {e}")
@@ -53,12 +76,17 @@ def add_lettuce_labels(df, detector):
         
         try:
             contexts = row["documents"]
-            question = row['question']
             answer = row['response']
+            
+            # Convert contexts to a single string if it's a list
+            if isinstance(contexts, list):
+                context = " ".join(contexts)
+            else:
+                context = contexts
 
             # Get span-level predictions indicating which parts of the answer are considered hallucinated.
             predictions = detector.predict(
-                context=contexts, question=question, answer=answer, output_format="spans"
+                context=context, answer=answer, output_format="spans"
             )
             label = []
             for pred in predictions:
@@ -84,14 +112,36 @@ def setup_llm_client(client_type="groq"):
         if not api_key:
             print("Error: OPENAI_API_KEY not found in environment variables")
             sys.exit(1)
-        return OpenAI()
+        try:
+            return OpenAI(api_key=api_key)
+        except TypeError as e:
+            if "proxies" in str(e):
+                # Fallback for httpx compatibility issues
+                import httpx
+                return OpenAI(
+                    api_key=api_key,
+                    http_client=httpx.Client()
+                )
+            else:
+                raise e
     elif client_type.lower() == "groq":
         from groq import Groq
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             print("Error: GROQ_API_KEY not found in environment variables")
             sys.exit(1)
-        return Groq()
+        try:
+            return Groq(api_key=api_key)
+        except TypeError as e:
+            if "proxies" in str(e):
+                # Fallback for httpx compatibility issues
+                import httpx
+                return Groq(
+                    api_key=api_key,
+                    http_client=httpx.Client()
+                )
+            else:
+                raise e
     else:
         print(f"Unsupported client type: {client_type}")
         sys.exit(1)
@@ -168,16 +218,13 @@ def main():
     """Main function to run the label generation pipeline"""
     parser = argparse.ArgumentParser(description='Generate labels for RAGBench dataset using LettuceDetect and LLM-as-a-judge')
     parser.add_argument('--train_path', type=str, 
-                       default="../datasets/train/train3000_w_response.jsonl",
+                       default="datasets/train/train3000_w_response.jsonl",
                        help='Path to training dataset')
-    parser.add_argument('--val_path', type=str, 
-                       default="../datasets/val/val100_w_response.jsonl",
-                       help='Path to validation dataset')
     parser.add_argument('--test_path', type=str, 
-                       default="../datasets/test/test100_w_response.jsonl",
+                       default="datasets/test/test1176_w_response.jsonl",
                        help='Path to test dataset')
     parser.add_argument('--output_dir', type=str, 
-                       default="../datasets",
+                       default="datasets",
                        help='Output directory for labeled datasets')
     parser.add_argument('--lettuce_method', type=str,
                        default="transformer",
@@ -198,8 +245,6 @@ def main():
                        help='Skip LLM-as-a-judge labeling')
     parser.add_argument('--skip_train', action='store_true',
                        help='Skip processing training dataset')
-    parser.add_argument('--skip_val', action='store_true',
-                       help='Skip processing validation dataset')
     parser.add_argument('--skip_test', action='store_true',
                        help='Skip processing test dataset')
     parser.add_argument('--verbose', action='store_true',
@@ -211,7 +256,7 @@ def main():
         print("Starting label generation pipeline...")
     
     # Load datasets
-    df_train, df_val, df_test = load_datasets(args.train_path, args.val_path, args.test_path)
+    df_train, df_test = load_datasets(args.train_path, args.test_path)
     
     # Setup LettuceDetect detector
     if not args.skip_lettuce:
@@ -233,18 +278,6 @@ def main():
                     os.path.join(args.output_dir, "train", "train3000_w_labels.jsonl"), 
                     "training")
     
-    # Process validation dataset
-    if not args.skip_val:
-        print("\nProcessing validation dataset...")
-        if not args.skip_lettuce:
-            df_val = add_lettuce_labels(df_val, detector)
-        if not args.skip_llm_judge:
-            for model in args.llm_models:
-                df_val = add_llm_judge(df_val, client, model)
-        save_dataset(df_val, 
-                    os.path.join(args.output_dir, "val", "val100_w_labels.jsonl"), 
-                    "validation")
-    
     # Process test dataset
     if not args.skip_test:
         print("\nProcessing test dataset...")
@@ -254,7 +287,7 @@ def main():
             for model in args.llm_models:
                 df_test = add_llm_judge(df_test, client, model)
         save_dataset(df_test, 
-                    os.path.join(args.output_dir, "test", "test100_w_labels.jsonl"), 
+                    os.path.join(args.output_dir, "test", "test1176_w_labels.jsonl"), 
                     "test")
     
     print("Label generation completed successfully!")
@@ -262,7 +295,6 @@ def main():
     # Return processed datasets for potential further use
     return {
         'train': df_train if not args.skip_train else None,
-        'val': df_val if not args.skip_val else None,
         'test': df_test if not args.skip_test else None
     }
 

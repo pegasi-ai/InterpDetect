@@ -254,7 +254,7 @@ def main():
     """Main function to run the classifier training pipeline"""
     parser = argparse.ArgumentParser(description='Train classifiers for hallucination detection')
     parser.add_argument('--input_dir', type=str, 
-                       default="../datasets/train/chunk_scores",
+                       default="../datasets/train",
                        help='Input directory containing JSON files with scores')
     parser.add_argument('--output_dir', type=str, 
                        default="../trained_models",

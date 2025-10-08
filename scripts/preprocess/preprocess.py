@@ -14,17 +14,15 @@ def load_data_from_hf():
     splits = {
         'train': 'finqa/train-00000-of-00001.parquet', 
         'test': 'finqa/test-00000-of-00001.parquet', 
-        'validation': 'finqa/validation-00000-of-00001.parquet'
     }
     
     try:
         df_train = pd.read_parquet("hf://datasets/galileo-ai/ragbench/" + splits["train"])
-        df_val = pd.read_parquet("hf://datasets/galileo-ai/ragbench/" + splits["validation"])
         df_test = pd.read_parquet("hf://datasets/galileo-ai/ragbench/" + splits["test"])
         
-        print(f"Loaded {len(df_train)} training samples, {len(df_val)} validation samples, {len(df_test)} test samples")
+        print(f"Loaded {len(df_train)} training samples, {len(df_test)} test samples")
         
-        return df_train, df_val, df_test
+        return df_train, df_test
         
     except Exception as e:
         print(f"Error loading data from HuggingFace: {e}")
@@ -115,12 +113,10 @@ def main():
     """Main function to run the preprocessing pipeline"""
     parser = argparse.ArgumentParser(description='Preprocess RAGBench dataset for hallucination detection')
     parser.add_argument('--output_dir', type=str, 
-                       default="../datasets",
+                       default="datasets",
                        help='Output directory for processed datasets')
     parser.add_argument('--skip_train', action='store_true',
                        help='Skip processing training dataset')
-    parser.add_argument('--skip_val', action='store_true',
-                       help='Skip processing validation dataset')
     parser.add_argument('--skip_test', action='store_true',
                        help='Skip processing test dataset')
     parser.add_argument('--verbose', action='store_true',
@@ -132,7 +128,7 @@ def main():
         print("Starting preprocessing pipeline...")
     
     # Load data from HuggingFace
-    df_train, df_val, df_test = load_data_from_hf()
+    df_train, df_test = load_data_from_hf()
     
     # Process and save training dataset
     if not args.skip_train:
@@ -140,13 +136,6 @@ def main():
         save_dataset(df_train_processed, 
                     os.path.join(args.output_dir, "train", "train.jsonl"), 
                     "training")
-    
-    # Process and save validation dataset
-    if not args.skip_val:
-        df_val_processed = process_dataset(df_val, "validation")
-        save_dataset(df_val_processed, 
-                    os.path.join(args.output_dir, "val", "val.jsonl"), 
-                    "validation")
     
     # Process and save test dataset
     if not args.skip_test:
@@ -160,7 +149,6 @@ def main():
     # Return processed datasets for potential further use
     return {
         'train': df_train_processed if not args.skip_train else None,
-        'val': df_val_processed if not args.skip_val else None,
         'test': df_test_processed if not args.skip_test else None
     }
 

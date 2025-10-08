@@ -207,7 +207,7 @@ def main():
     """Main function to run the prediction pipeline"""
     parser = argparse.ArgumentParser(description='Make predictions using trained hallucination detection models')
     parser.add_argument('--data_path', type=str, 
-                       default="../datasets/test/test1176_w_chunk_score.json",
+                       default="../datasets/test/test_w_chunk_score_qwen06b.json",
                        help='Path to test data file')
     parser.add_argument('--model_path', type=str, 
                        default="../trained_models/model_SVC_3000.pickle",

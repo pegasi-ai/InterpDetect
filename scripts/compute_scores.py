@@ -352,10 +352,10 @@ def main():
     """Main function to run the score computation pipeline"""
     parser = argparse.ArgumentParser(description='Compute interpretability scores for hallucination detection')
     parser.add_argument('--input_path', type=str, 
-                       default="../datasets/train/train3000_w_labels_filtered.jsonl",
+                       default="preprocess/datasets/train/train3000_w_labels_filtered.jsonl",
                        help='Path to input dataset')
     parser.add_argument('--output_dir', type=str, 
-                       default="../datasets/train/chunk_scores",
+                       default="../datasets/train",
                        help='Output directory for computed scores')
     parser.add_argument('--model_name', type=str,
                        default="qwen3-0.6b",
