@@ -239,10 +239,6 @@ def main():
     parser.add_argument('--llm_models', nargs='+',
                        default=["meta-llama/llama-4-maverick-17b-128e-instruct", "openai/gpt-oss-120b"],
                        help='LLM models to use for judge evaluation')
-    parser.add_argument('--skip_lettuce', action='store_true',
-                       help='Skip LettuceDetect labeling')
-    parser.add_argument('--skip_llm_judge', action='store_true',
-                       help='Skip LLM-as-a-judge labeling')
     parser.add_argument('--skip_train', action='store_true',
                        help='Skip processing training dataset')
     parser.add_argument('--skip_test', action='store_true',
