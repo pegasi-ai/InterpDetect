@@ -1,58 +1,47 @@
 # Core Data Science and Machine Learning
-pandas>=1.5.0
-numpy>=1.21.0,<1.27.0  # Constraint for compatibility with some packages
-scikit-learn>=1.3.0
-scipy>=1.9.0
+pandas
+numpy
+scikit-learn
+scipy
 
 # Deep Learning and Transformers
-torch>=2.0.0
-transformers>=4.30.0
-sentence-transformers>=2.2.0
-transformer-lens>=1.4.0
+torch==2.6.0
+transformers==4.57.0
+sentence-transformers>=2.7.0
+transformer-lens
 
 # Machine Learning Models
-xgboost>=1.7.0
-lightgbm>=4.0.0
-feature-engine>=1.6.0
+xgboost==1.7.6
+feature-engine==1.8.3
 
 # Visualization
-matplotlib>=3.5.0
-seaborn>=0.11.0
+matplotlib==3.10.3
+seaborn==0.13.2
 
 # Progress Bars
-tqdm>=4.64.0
+tqdm==4.66.1
 
 # Natural Language Processing
-nltk>=3.8.0
-unidecode>=1.3.0
+nltk==3.8.1
+unidecode==1.3.7
 
 # API Clients
-openai>=1.0.0
-groq>=0.4.0
+openai==1.3.7
+groq==0.4.1
 
 # Environment and Configuration
-python-dotenv>=1.0.0
+python-dotenv==1.0.0
 
 # HuggingFace Datasets
-datasets>=2.12.0
-
-# RAG Evaluation Frameworks
-ragas>=0.0.22
-langchain-openai>=0.0.5
-
-# Fact-checking and Evaluation
-refchecker>=0.1.0
-
-# LLM Evaluation Framework
-trulens>=0.20.0
-trulens-providers-openai>=0.20.0
-chromadb>=0.4.0
+datasets==2.14.7
 
 # Hallucination Detection
-lettucedetect>=0.1.0
+lettucedetect==0.1.0
+
+accelerate>=0.34.0
 
 # Text Processing
-textwrap  # Built-in, no version needed
+#textwrap  # Built-in, no version needed
 
 # Standard Library (no version needed)
 # argparse, sys, os, json, glob, pickle, re, gc, time, typing
