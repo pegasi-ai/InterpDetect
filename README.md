@@ -1,14 +1,37 @@
 # InterpDetect
 
-A comprehensive framework for detecting and analyzing hallucinations in language models using interpretability techniques and chunk-level analysis on the RAGBench/FinQA dataset.
+**InterpDetect: Interpretable Signals for Detecting Hallucinations in Retrieval-Augmented Generation**
+
+[![Paper](https://img.shields.io/badge/Paper-OpenReview-blue)](https://openreview.net/pdf?id=TZzBKwHLwF)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+A comprehensive framework for detecting and analyzing hallucinations in Retrieval-Augmented Generation (RAG) systems using interpretability techniques and chunk-level analysis on the RAGBench/FinQA dataset.
+
+## 📄 Paper
+
+This repository contains the implementation for our paper:
+
+**InterpDetect: Interpretable Signals for Detecting Hallucinations in Retrieval-Augmented Generation**  
+*Likun Tan, Kuan-Wei Huang, Joy Shi, Kevin Wu*  
+Pegasi AI, NYC  
+[Read the paper on OpenReview](https://openreview.net/pdf?id=TZzBKwHLwF)
+
+### Abstract
+
+Retrieval-Augmented Generation (RAG) integrates external knowledge to mitigate hallucinations, yet models often generate outputs inconsistent with retrieved content. We investigate the mechanisms underlying RAG hallucinations and find they arise when later-layer FFN modules disproportionately inject parametric knowledge into the residual stream. To address this, we explore a mechanistic detection approach based on:
+
+- **External Context Score (ECS)**: Quantifies how much a model's output relies on retrieved information
+- **Parametric Knowledge Score (PKS)**: Reflects contributions from feed-forward networks that inject parametric knowledge
+
+Using Qwen3-0.6b, we compute these scores across layers and attention heads and train regression-based classifiers to predict hallucinations. Our method is evaluated against state-of-the-art LLMs (GPT-5, GPT-4.1) and detection baselines (RAGAS, TruLens, RefChecker). Furthermore, classifiers trained on Qwen3-0.6b signals generalize to GPT-4.1-mini responses, demonstrating the potential of proxy-model evaluation.
 
 ## Overview
 
-This project implements a novel approach to hallucination detection by leveraging interpretability methods (PKS - Parameter Knowledge Score and ECS - Embedding Cosine Similarity) and chunk-level scoring. The framework consists of three main parts:
+This project implements a novel approach to hallucination detection by leveraging interpretability methods. The framework consists of three main parts:
 
 1. **Preprocessing Pipeline** - Convert raw datasets to labeled data with hallucination spans
 2. **Training & Prediction** - Train classifiers or use pre-trained models for hallucination detection
-3. **Baseline Comparisons** - Evaluate against multiple baseline methods
+3. **Baseline Comparisons** - Evaluate against multiple baseline methods (RAGAS, TruLens, RefChecker, GPT-based, etc.)
 
 The framework can work with existing labeled datasets or process raw data through the complete pipeline.
 
@@ -284,6 +307,20 @@ GROQ_API_KEY=your_groq_api_key_here
 HUGGINGFACE_TOKEN=your_hf_token_here
 ```
 
+## Citation
+
+If you use this code or our work in your research, please cite our paper:
+
+```bibtex
+@inproceedings{tan2025interpdetect,
+  title={InterpDetect: Interpretable Signals for Detecting Hallucinations in Retrieval-Augmented Generation},
+  author={Tan, Likun and Huang, Kuan-Wei and Shi, Joy and Wu, Kevin},
+  booktitle={OpenReview},
+  year={2025},
+  url={https://openreview.net/pdf?id=TZzBKwHLwF}
+}
+```
+
 ## Contributing
 
 1. Fork the repository
@@ -300,6 +337,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Thanks to the open-source community for the various baseline implementations
-- Contributors to the interpretability research community
+- Contributors to the interpretability research community, especially the TransformerLens team
+- The RAGBench team for providing the FinQA dataset
 - Users and testers of this framework
-- The transformer-lens, ragas, and trulens communities for their excellent tools
