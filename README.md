@@ -7,24 +7,6 @@
 
 A comprehensive framework for detecting and analyzing hallucinations in Retrieval-Augmented Generation (RAG) systems using interpretability techniques and chunk-level analysis on the RAGBench/FinQA dataset.
 
-## 📄 Paper
-
-This repository contains the implementation for our paper:
-
-**InterpDetect: Interpretable Signals for Detecting Hallucinations in Retrieval-Augmented Generation**  
-*Likun Tan, Kuan-Wei Huang, Joy Shi, Kevin Wu*  
-Pegasi AI, NYC  
-[Read the paper on OpenReview](https://openreview.net/pdf?id=TZzBKwHLwF)
-
-### Abstract
-
-Retrieval-Augmented Generation (RAG) integrates external knowledge to mitigate hallucinations, yet models often generate outputs inconsistent with retrieved content. We investigate the mechanisms underlying RAG hallucinations and find they arise when later-layer FFN modules disproportionately inject parametric knowledge into the residual stream. To address this, we explore a mechanistic detection approach based on:
-
-- **External Context Score (ECS)**: Quantifies how much a model's output relies on retrieved information
-- **Parametric Knowledge Score (PKS)**: Reflects contributions from feed-forward networks that inject parametric knowledge
-
-Using Qwen3-0.6b, we compute these scores across layers and attention heads and train regression-based classifiers to predict hallucinations. Our method is evaluated against state-of-the-art LLMs (GPT-5, GPT-4.1) and detection baselines (RAGAS, TruLens, RefChecker). Furthermore, classifiers trained on Qwen3-0.6b signals generalize to GPT-4.1-mini responses, demonstrating the potential of proxy-model evaluation.
-
 ## Overview
 
 This project implements a novel approach to hallucination detection by leveraging interpretability methods. The framework consists of three main parts:
